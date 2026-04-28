@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Tree — профиль как дерево</title>
+    <style>
+        :root {
+            --bg: #1a1a2e;
+            --surface: rgba(30, 30, 50, 0.85);
+            --text: #e0e0e0;
+            --accent: #6ecf8a;
+            --accent2: #4ea8de;
+            --input-bg: rgba(20, 20, 40, 0.7);
+            --border: rgba(255, 255, 255, 0.15);
+            --shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .overlay {
+            position: fixed;
+            z-index: 10;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+            pointer-events: none;
+        }
+
+        .card {
+            background: var(--surface);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 22px 28px;
+            box-shadow: var(--shadow);
+            pointer-events: all;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: center;
+            min-width: 340px;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 12px 50px rgba(0, 0, 0, 0.6);
+        }
+
+        .title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: 0.02em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .title .icon {
+            font-size: 1.7rem;
+        }
+        .title .accent {
+            color: var(--accent);
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+        }
+
+        input {
+            flex: 1;
+            padding: 12px 16px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: var(--input-bg);
+            color: #fff;
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.25s ease;
+            font-family: inherit;
+            letter-spacing: 0.01em;
+        }
+        input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+        input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(110, 207, 138, 0.2);
+            background: rgba(25, 25, 50, 0.85);
+        }
+
+        button {
+            padding: 12px 20px;
+            border-radius: 14px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            letter-spacing: 0.03em;
+            transition: all 0.25s ease;
+            font-family: inherit;
+            background: var(--accent);
+            color: #1a1a2e;
+            white-space: nowrap;
+            position: relative;
+            overflow: hidden;
+        }
+        button:hover {
+            background: #7de29a;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(110, 207, 138, 0.4);
+        }
+        button:active {
+            transform: scale(0.96);
+            transition: transform 0.1s ease;
+        }
+        button.loading {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+        button .spinner {
+            display: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid transparent;
+            border-top-color: #1a1a2e;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            margin: -9px 0 0 -9px;
+        }
+        button.loading .spinner {
+            display: block;
+        }
+        button.loading .btn-text {
+            opacity: 0;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .stats {
+            display: flex;
+            gap: 16px;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+            letter-spacing: 0.02em;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .stats span {
+            background: rgba(255, 255, 255, 0.06);
+            padding: 6px 12px;
+            border-radius: 20px;
+            white-space: nowrap;
+        }
+        .stats .val {
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .hint {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.4);
+            text-align: center;
+            pointer-events: all;
+            letter-spacing: 0.02em;
+        }
+        .hint span {
+            color: var(--accent2);
+            cursor: pointer;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+            transition: color 0.2s;
+        }
+        .hint span:hover {
+            color: #6db9e8;
+        }
+
+        .error-msg {
+            color: #f48b8b;
+            font-size: 0.8rem;
+            text-align: center;
+            min-height: 20px;
+            transition: opacity 0.3s;
+        }
+
+        .tooltip {
+            position: fixed;
+            z-index: 20;
+            background: rgba(20, 20, 35, 0.92);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            padding: 10px 14px;
+            color: #e0e0e0;
+            font-size: 0.85rem;
+            pointer-events: none;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            max-width: 260px;
+            line-height: 1.4;
+            display: none;
+        }
+        .tooltip strong {
+            color: #fff;
+            font-size: 0.95rem;
+        }
+        .tooltip small {
+            color: #b0b0b0;
+            display: block;
+            margin-top: 2px;
+            font-size: 0.75rem;
+        }
+
+        @media (max-width: 480px) {
+            .card {
+                min-width: auto;
+                width: 90vw;
+                padding: 16px 18px;
+                gap: 10px;
+            }
+            .title {
+                font-size: 1.2rem;
+            }
+            input {
+                font-size: 0.85rem;
+                padding: 10px 12px;
+            }
+            button {
+                font-size: 0.8rem;
+                padding: 10px 14px;
+            }
+            .stats {
+                font-size: 0.7rem;
+                gap: 8px;
+            }
+            .tooltip {
+                max-width: 200px;
+                font-size: 0.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div class="tooltip" id="tooltip"></div>
+
+    <div class="overlay">
+        <div class="card">
+            <div class="title">
+                <span class="icon">🌳</span>
+                <span>GitHub <span class="accent">Tree</span></span>
+            </div>
+            <div class="input-row">
+                <input
+                type="text"
+                id="usernameInput"
+                placeholder="Имя пользователя GitHub"
+                autocomplete="off"
+                spellcheck="false"
+                />
+                <button id="growBtn">
+                    <span class="btn-text">Вырастить</span>
+                    <span class="spinner"></span>
+                </button>
+            </div>
+            <div class="error-msg" id="errorMsg"></div>
+            <div class="stats" id="statsRow" style="display:none;">
+                <span>🌿 Репо: <span class="val" id="repoCount">0</span></span>
+                <span>⭐ Звёзд: <span class="val" id="starSum">0</span></span>
+                <span>🌱 Веток: <span class="val" id="branchCount">0</span></span>
+                <span>🍃 Листьев: <span class="val" id="leafCount">0</span></span>
+            </div>
+        </div>
+        <div class="hint">
+            Попробуйте: <span data-user="torvalds">torvalds</span> ·
+            <span data-user="gaearon">gaearon</span> ·
+            <span data-user="mojombo">mojombo</span>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const tooltip = document.getElementById('tooltip');
+            const usernameInput = document.getElementById('usernameInput');
+            const growBtn = document.getElementById('growBtn');
+            const errorMsg = document.getElementById('errorMsg');
+            const statsRow = document.getElementById('statsRow');
+            const repoCountEl = document.getElementById('repoCount');
+            const starSumEl = document.getElementById('starSum');
+            const branchCountEl = document.getElementById('branchCount');
+            const leafCountEl = document.getElementById('leafCount');
+
+            let W, H, groundY;
+            let mouseX = -1000, mouseY = -1000;
+            let hoveredBranch = null;
+
+            function resize() {
+                W = canvas.width = window.innerWidth;
+                H = canvas.height = window.innerHeight;
+                groundY = H * 0.88;
+            }
+            resize();
+            window.addEventListener('resize', () => {
+                resize();
+                if (treeData && treeData.built) {
+                    repositionTree(treeData);
+                }
+            });
+
+            const wind = { x: 0, y: 0, time: 0 };
+            function updateWind(dt) {
+                wind.time += dt;
+                const t = wind.time;
+                const base = Math.sin(t * 0.55) * 0.7 +
+                    Math.sin(t * 1.17 + 1.3) * 0.5 +
+                    Math.sin(t * 2.03 + 2.7) * 0.35 +
+                    Math.sin(t * 3.41 + 0.8) * 0.25 +
+                    Math.sin(t * 0.37 + 4.1) * 0.6;
+                const gust = Math.max(0, Math.sin(t * 0.23 + 1.9)) * 1.8 *
+                    (0.5 + 0.5 * Math.sin(t * 1.73 + 0.4));
+                wind.x = base + gust;
+                wind.y = Math.sin(t * 0.61 + 2.1) * 0.2 + Math.cos(t * 1.29) * 0.15;
+            }
+
+            const particles = [];
+            const MAX_PARTICLES = 55;
+            function spawnParticle(x, y) {
+                if (particles.length >= MAX_PARTICLES) return;
+                particles.push({
+                    x: x || (Math.random() - 0.3) * W,
+                    y: y || groundY - Math.random() * H * 0.75,
+                    vx: (Math.random() - 0.5) * 0.6,
+                    vy: -Math.random() * 1.2 - 0.3,
+                    life: 1,
+                    decay: 0.003 + Math.random() * 0.012,
+                    size: 1.2 + Math.random() * 3.5,
+                    hue: 40 + Math.random() * 50,
+                    alpha: 0.5 + Math.random() * 0.5,
+                });
+            }
+            function updateParticles(dt) {
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    const p = particles[i];
+                    p.x += p.vx * dt * 60 + wind.x * dt * 25;
+                    p.y += p.vy * dt * 60 + wind.y * dt * 15;
+                    p.life -= p.decay * dt * 60;
+                    if (p.life <= 0 || p.y < -50 || p.y > H + 50) {
+                        particles.splice(i, 1);
+                    }
+                }
+                if (particles.length < MAX_PARTICLES && Math.random() < 0.3) {
+                    spawnParticle();
+                }
+            }
+            function renderParticles(ctx) {
+                for (const p of particles) {
+                    const alpha = p.life * p.alpha;
+                    ctx.fillStyle = `hsla(${p.hue}, 80%, 70%, ${alpha})`;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = `hsla(${p.hue}, 90%, 80%, ${alpha * 0.4})`;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size * 2.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            const fallingLeaves = [];
+            function spawnFallingLeaf(x, y, color) {
+                fallingLeaves.push({
+                    x,
+                    y,
+                    vx: (Math.random() - 0.5) * 2 + wind.x * 3,
+                    vy: Math.random() * 1.5 + 0.5,
+                    rot: Math.random() * Math.PI * 2,
+                    rotV: (Math.random() - 0.5) * 5,
+                    life: 1,
+                    decay: 0.003 + Math.random() * 0.006,
+                    size: 5 + Math.random() * 9,
+                    color: color || `hsl(${35 + Math.random()*30}, ${60+Math.random()*30}%, ${35+Math.random()*30}%)`,
+                    swayPhase: Math.random() * Math.PI * 2,
+                });
+            }
+            function updateFallingLeaves(dt) {
+                for (let i = fallingLeaves.length - 1; i >= 0; i--) {
+                    const fl = fallingLeaves[i];
+                    fl.swayPhase += dt * (1.5 + Math.random());
+                    fl.vx += wind.x * dt * 8;
+                    fl.vy += 0.15 * dt * 60;
+                    fl.x += fl.vx * dt * 60 + Math.sin(fl.swayPhase) * dt * 25;
+                    fl.y += fl.vy * dt * 60;
+                    fl.rot += fl.rotV * dt * 60;
+                    fl.life -= fl.decay * dt * 60;
+                    if (fl.life <= 0 || fl.y > groundY + 20 || fl.x < -60 || fl.x > W + 60) {
+                        fallingLeaves.splice(i, 1);
+                    }
+                }
+            }
+            function renderFallingLeaves(ctx) {
+                for (const fl of fallingLeaves) {
+                    ctx.save();
+                    ctx.globalAlpha = fl.life;
+                    ctx.translate(fl.x, fl.y);
+                    ctx.rotate(fl.rot);
+                    ctx.fillStyle = fl.color;
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, fl.size, fl.size * 0.45, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+                    ctx.lineWidth = 0.6;
+                    ctx.beginPath();
+                    ctx.moveTo(-fl.size * 0.7, 0);
+                    ctx.lineTo(fl.size * 0.7, 0);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+
+            class Branch {
+                constructor(parent, relAngle, length, thickness, depth) {
+                    this.parent = parent;
+                    this.relAngle = relAngle;
+                    this.targetRelAngle = relAngle;
+                    this.length = length;
+                    this.targetLength = length;
+                    this.thickness = thickness;
+                    this.depth = depth;
+                    this.children = [];
+                    this.leaves = [];
+                    this.worldAngle = 0;
+                    this.baseX = 0;
+                    this.baseY = 0;
+                    this.tipX = 0;
+                    this.tipY = 0;
+                    this.growthFactor = 0;
+                    this.angularVelocity = 0;
+                    this.swayOffset = 0;
+                    this.repoData = null;
+                }
+
+                addChild(child) {
+                    this.children.push(child);
+                }
+
+                addLeaf(leaf) {
+                    this.leaves.push(leaf);
+                }
+
+                updateWorldPositions() {
+                    if (this.parent) {
+                        const p = this.parent;
+                        const actualAttach = 0.5 + this.depth * 0.08;
+                        const ax = p.baseX + (p.tipX - p.baseX) * actualAttach;
+                        const ay = p.baseY + (p.tipY - p.baseY) * actualAttach;
+                        this.baseX = ax;
+                        this.baseY = ay;
+                        this.worldAngle = p.worldAngle + this.relAngle + this.swayOffset;
+                    } else {
+                        this.worldAngle = this.relAngle + this.swayOffset;
+                    }
+                    const effLen = this.length * this.growthFactor;
+                    this.tipX = this.baseX + Math.cos(this.worldAngle) * effLen;
+                    this.tipY = this.baseY + Math.sin(this.worldAngle) * effLen;
+                    for (const child of this.children) {
+                        child.updateWorldPositions();
+                    }
+                    for (const leaf of this.leaves) {
+                        leaf.anchorX = this.baseX + (this.tipX - this.baseX) * leaf.attachFrac;
+                        leaf.anchorY = this.baseY + (this.tipY - this.baseY) * leaf.attachFrac;
+                    }
+                }
+
+                updatePhysics(dt) {
+                    const windTorque = wind.x * Math.cos(this.worldAngle) * 0.6 +
+                        wind.y * Math.sin(this.worldAngle) * 0.3;
+                    const springTorque = -4.5 * this.swayOffset;
+                    const dampingTorque = -2.8 * this.angularVelocity;
+                    const inertia = 0.5 + this.length * 0.015;
+                    const angularAccel = (springTorque + dampingTorque + windTorque) / inertia;
+                    this.angularVelocity += angularAccel * dt;
+                    this.angularVelocity *= 0.92;
+                    this.swayOffset += this.angularVelocity * dt;
+                    this.swayOffset = Math.max(-0.35, Math.min(0.35, this.swayOffset));
+                    if (Math.abs(this.swayOffset) < 0.0005 && Math.abs(this.angularVelocity) < 0.0005) {
+                        this.swayOffset = 0;
+                        this.angularVelocity = 0;
+                    }
+                    for (const child of this.children) {
+                        child.updatePhysics(dt);
+                    }
+                }
+            }
+
+            class Leaf {
+                constructor(attachFrac, offsetX, offsetY, color, size) {
+                    this.attachFrac = attachFrac;
+                    this.offsetX = offsetX;
+                    this.offsetY = offsetY;
+                    this.color = color;
+                    this.size = size;
+                    this.anchorX = 0;
+                    this.anchorY = 0;
+                    this.x = 0;
+                    this.y = 0;
+                    this.vx = 0;
+                    this.vy = 0;
+                    this.angle = Math.random() * Math.PI * 2;
+                    this.restX = offsetX;
+                    this.restY = offsetY;
+                }
+
+                updatePhysics(dt) {
+                    const rx = this.x - this.anchorX - this.restX;
+                    const ry = this.y - this.anchorY - this.restY;
+                    const springK = 10;
+                    const dampK = 4.5;
+                    const fx = -springK * rx - dampK * this.vx + wind.x * 3.5;
+                    const fy = -springK * ry - dampK * this.vy + wind.y * 3.5 + 0.6;
+                    this.vx += fx * dt;
+                    this.vy += fy * dt;
+                    this.vx *= 0.94;
+                    this.vy *= 0.94;
+                    this.x += this.vx * dt;
+                    this.y += this.vy * dt;
+                    const maxDist = 35;
+                    const dx = this.x - this.anchorX - this.restX;
+                    const dy = this.y - this.anchorY - this.restY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist > maxDist) {
+                        const nx = dx / dist;
+                        const ny = dy / dist;
+                        this.x = this.anchorX + this.restX + nx * maxDist;
+                        this.y = this.anchorY + this.restY + ny * maxDist;
+                        this.vx *= 0.5;
+                        this.vy *= 0.5;
+                    }
+                    this.angle += (Math.sin(wind.time * 8 + this.anchorX * 0.03) * 0.08) * dt;
+                }
+
+                initPosition() {
+                    this.x = this.anchorX + this.restX;
+                    this.y = this.anchorY + this.restY;
+                    this.vx = 0;
+                    this.vy = 0;
+                }
+            }
+
+            let treeData = null;
+            let allBranchesFlat = [];
+            let allLeavesFlat = [];
+            let growthStartTime = -1;
+            const GROWTH_DURATION = 3.2;
+
+            function clearTree() {
+                treeData = null;
+                allBranchesFlat = [];
+                allLeavesFlat = [];
+                growthStartTime = -1;
+                fallingLeaves.length = 0;
+            }
+
+            function repositionTree(tree) {
+                const trunk = tree.trunk;
+                trunk.baseX = W / 2;
+                trunk.baseY = groundY;
+                trunk.updateWorldPositions();
+                for (const leaf of allLeavesFlat) {
+                    leaf.initPosition();
+                }
+            }
+
+            function buildTreeFromRepos(repos) {
+                clearTree();
+                const repoCount = Math.min(repos.length, 55);
+                if (repoCount === 0) {
+                    return buildMinimalTree();
+                }
+
+                const trunkHeight = H * 0.22;
+                const trunkThickness = 14 + repoCount * 0.3;
+                const trunk = new Branch(null, -Math.PI / 2, trunkHeight, trunkThickness, 0);
+                trunk.baseX = W / 2;
+                trunk.baseY = groundY;
+                trunk.growthFactor = 0;
+
+                const allBranches = [trunk];
+                const allLeaves = [];
+
+                const fanSpread = 1.35;
+                const startAngle = -Math.PI / 2 - fanSpread;
+                const endAngle = -Math.PI / 2 + fanSpread;
+
+                for (let i = 0; i < repoCount; i++) {
+                    const frac = repoCount === 1 ? 0.5 : i / (repoCount - 1);
+                    const angle = startAngle + frac * (endAngle - startAngle);
+                    const jitter = (Math.random() - 0.5) * 0.3;
+                    const relAngle = angle - (-Math.PI / 2) + jitter;
+                    const length = trunkHeight * (0.7 + Math.random() * 1.1);
+                    const thickness = 3 + Math.random() * 5 + (repos[i].stargazers_count || 0) * 0.02;
+                    const mainBranch = new Branch(trunk, relAngle, length, Math.min(thickness, 18), 1);
+                    mainBranch.growthFactor = 0;
+                    mainBranch.repoData = repos[i];
+                    trunk.addChild(mainBranch);
+                    allBranches.push(mainBranch);
+
+                    const subCount = 2 + Math.floor(Math.random() * 4);
+                    for (let s = 0; s < subCount; s++) {
+                        const subRelAngle = (Math.random() - 0.5) * 1.1;
+                        const subLength = length * (0.3 + Math.random() * 0.5);
+                        const subThickness = thickness * (0.25 + Math.random() * 0.4);
+                        const subBranch = new Branch(mainBranch, subRelAngle, subLength, Math.max(subThickness, 1.2), 2);
+                        subBranch.growthFactor = 0;
+                        mainBranch.addChild(subBranch);
+                        allBranches.push(subBranch);
+
+                        const leafCount = 10 + Math.floor(Math.random() * 16);
+                        for (let l = 0; l < leafCount; l++) {
+                            const attachFrac = 0.15 + Math.random() * 0.8;
+                            const offsetX = (Math.random() - 0.5) * 22;
+                            const offsetY = (Math.random() - 0.5) * 18 - 8;
+                            const hue = 80 + Math.random() * 55;
+                            const sat = 50 + Math.random() * 45;
+                            const light = 28 + Math.random() * 38;
+                            const color = `hsl(${hue}, ${sat}%, ${light}%)`;
+                            const size = 4 + Math.random() * 9;
+                            const leaf = new Leaf(attachFrac, offsetX, offsetY, color, size);
+                            subBranch.addLeaf(leaf);
+                            allLeaves.push(leaf);
+                        }
+                    }
+
+                    const directLeafCount = 4 + Math.floor(Math.random() * 8);
+                    for (let l = 0; l < directLeafCount; l++) {
+                        const attachFrac = 0.3 + Math.random() * 0.65;
+                        const offsetX = (Math.random() - 0.5) * 16;
+                        const offsetY = (Math.random() - 0.5) * 14 - 5;
+                        const hue = 75 + Math.random() * 60;
+                        const sat = 48 + Math.random() * 48;
+                        const light = 26 + Math.random() * 40;
+                        const color = `hsl(${hue}, ${sat}%, ${light}%)`;
+                        const size = 3.5 + Math.random() * 8;
+                        const leaf = new Leaf(attachFrac, offsetX, offsetY, color, size);
+                        mainBranch.addLeaf(leaf);
+                        allLeaves.push(leaf);
+                    }
+                }
+
+                const numAutumn = Math.floor(allLeaves.length * 0.06);
+                for (let i = 0; i < numAutumn; i++) {
+                    const idx = Math.floor(Math.random() * allLeaves.length);
+                    const hue = 15 + Math.random() * 35;
+                    allLeaves[idx].color = `hsl(${hue}, ${70+Math.random()*25}%, ${40+Math.random()*30}%)`;
+                }
+
+                trunk.updateWorldPositions();
+                for (const leaf of allLeaves) {
+                    leaf.initPosition();
+                }
+
+                treeData = {
+                    trunk,
+                    allBranches,
+                    allLeaves,
+                    built: true,
+                    repoCount,
+                    starSum: repos.reduce((s, r) => s + (r.stargazers_count || 0), 0),
+                };
+                allBranchesFlat = allBranches;
+                allLeavesFlat = allLeaves;
+                growthStartTime = performance.now() / 1000;
+            }
+
+            function buildMinimalTree() {
+                const trunkHeight = H * 0.15;
+                const trunk = new Branch(null, -Math.PI / 2, trunkHeight, 8, 0);
+                trunk.baseX = W / 2;
+                trunk.baseY = groundY;
+                trunk.growthFactor = 0;
+                const allBranches = [trunk];
+                const allLeaves = [];
+                for (let i = 0; i < 3; i++) {
+                    const relAngle = (Math.random() - 0.5) * 0.8;
+                    const len = trunkHeight * 0.7;
+                    const b = new Branch(trunk, relAngle, len, 3, 1);
+                    b.growthFactor = 0;
+                    trunk.addChild(b);
+                    allBranches.push(b);
+                    for (let l = 0; l < 8; l++) {
+                        const leaf = new Leaf(0.3 + Math.random() * 0.6, (Math.random() - 0.5) * 14, (Math.random() - 0.5) * 12 - 4,
+                            `hsl(${85+Math.random()*40}, ${50+Math.random()*40}%, ${30+Math.random()*30}%)`, 4 + Math.random() * 7);
+                        b.addLeaf(leaf);
+                        allLeaves.push(leaf);
+                    }
+                }
+                trunk.updateWorldPositions();
+                for (const leaf of allLeaves) {
+                    leaf.initPosition();
+                }
+                treeData = { trunk, allBranches, allLeaves, built: true, repoCount: 0, starSum: 0 };
+                allBranchesFlat = allBranches;
+                allLeavesFlat = allLeaves;
+                growthStartTime = performance.now() / 1000;
+            }
+
+            function updateGrowth(now) {
+                if (growthStartTime < 0 || !treeData) return;
+                const elapsed = now - growthStartTime;
+                for (let i = 0; i < treeData.allBranches.length; i++) {
+                    const branch = treeData.allBranches[i];
+                    const stagger = branch.depth * 0.25 + i * 0.04;
+                    const localElapsed = Math.max(0, elapsed - stagger);
+                    const dur = GROWTH_DURATION - branch.depth * 0.3;
+                    const t = Math.min(1, localElapsed / Math.max(dur, 0.3));
+                    const eased = 1 - Math.pow(1 - t, 3);
+                    branch.growthFactor = eased;
+                }
+            }
+
+            function isGrowthComplete() {
+                if (!treeData) return true;
+                return treeData.allBranches.every(b => b.growthFactor >= 0.999);
+            }
+
+            function findHoveredBranch() {
+                if (mouseX < 0 || mouseY < 0) {
+                    hoveredBranch = null;
+                    return;
+                }
+                let minDist = Infinity;
+                let found = null;
+                for (const branch of allBranchesFlat) {
+                    if (!branch.repoData) continue;
+                    const gf = branch.growthFactor;
+                    if (gf < 0.05) continue;
+                    const effLen = branch.length * gf;
+                    const bx = branch.baseX, by = branch.baseY;
+                    const tx = branch.tipX, ty = branch.tipY;
+                    const dx = tx - bx, dy = ty - by;
+                    const len2 = dx * dx + dy * dy;
+                    if (len2 < 0.01) continue;
+                    const mx = mouseX, my = mouseY;
+                    const t = Math.max(0, Math.min(1, ((mx - bx) * dx + (my - by) * dy) / len2));
+                    const projX = bx + t * dx;
+                    const projY = by + t * dy;
+                    const dist = Math.hypot(mx - projX, my - projY);
+                    const threshold = Math.max(6, branch.thickness * gf * 0.8 + 8);
+                    if (dist < threshold && dist < minDist) {
+                        minDist = dist;
+                        found = branch;
+                    }
+                }
+                hoveredBranch = found;
+            }
+
+            function updateTooltip() {
+                if (hoveredBranch && hoveredBranch.repoData) {
+                    const repo = hoveredBranch.repoData;
+                    tooltip.innerHTML = `<strong>${repo.name}</strong>${repo.description ? '<small>' + repo.description + '</small>' : ''}<br>⭐ ${repo.stargazers_count} · ${repo.language || '—'}`;
+                    tooltip.style.display = 'block';
+                    let left = mouseX + 18;
+                    let top = mouseY + 18;
+                    if (left + 260 > W) left = mouseX - 260;
+                    if (top + 80 > H) top = mouseY - 80;
+                    tooltip.style.left = left + 'px';
+                    tooltip.style.top = top + 'px';
+                    canvas.style.cursor = 'pointer';
+                } else {
+                    tooltip.style.display = 'none';
+                    canvas.style.cursor = '';
+                }
+            }
+
+            function drawSky(ctx) {
+                const grad = ctx.createLinearGradient(0, 0, 0, groundY);
+                grad.addColorStop(0, '#c9e4f7');
+                grad.addColorStop(0.55, '#e8f4fb');
+                grad.addColorStop(0.9, '#dde8d0');
+                grad.addColorStop(1, '#c5d8b5');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, W, groundY);
+            }
+
+            function drawGround(ctx) {
+                const grad = ctx.createLinearGradient(0, groundY, 0, H);
+                grad.addColorStop(0, '#7a9a5c');
+                grad.addColorStop(0.15, '#6b8a4e');
+                grad.addColorStop(0.5, '#5a7840');
+                grad.addColorStop(1, '#3d5530');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, groundY, W, H - groundY);
+
+                ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(0, groundY);
+                ctx.quadraticCurveTo(W / 2, groundY - 4, W, groundY);
+                ctx.stroke();
+
+                ctx.strokeStyle = 'rgba(90,140,60,0.5)';
+                ctx.lineWidth = 1;
+                for (let i = 0; i < W; i += 18 + Math.random() * 25) {
+                    const x = i + Math.random() * 15;
+                    const baseY = groundY + Math.random() * 6;
+                    const h = 6 + Math.random() * 16;
+                    ctx.beginPath();
+                    ctx.moveTo(x, baseY);
+                    ctx.quadraticCurveTo(x + (Math.random() - 0.5) * 8, baseY - h, x + (Math.random() - 0.5) * 6, baseY - h - 3);
+                    ctx.stroke();
+                    if (Math.random() < 0.4) {
+                        ctx.beginPath();
+                        ctx.moveTo(x, baseY);
+                        ctx.quadraticCurveTo(x + (Math.random() - 0.5) * 6, baseY - h * 0.7, x + (Math.random() - 0.5) * 5, baseY - h * 0.7 - 2);
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            function drawBranch(ctx, branch) {
+                if (branch.growthFactor < 0.001) return;
+                const effLen = branch.length * branch.growthFactor;
+                if (effLen < 0.5) return;
+                const bx = branch.baseX;
+                const by = branch.baseY;
+                const tx = branch.tipX;
+                const ty = branch.tipY;
+                const thickness = branch.thickness * branch.growthFactor;
+
+                let color;
+                if (branch.depth === 0) {
+                    color = '#5a3825';
+                } else if (branch.depth === 1) {
+                    const t = branch.growthFactor;
+                    const r = Math.round(90 - t * 20);
+                    const g = Math.round(55 + t * 35);
+                    const b = Math.round(35 + t * 10);
+                    color = `rgb(${r},${g},${b})`;
+                } else {
+                    const r = Math.round(65 + branch.growthFactor * 15);
+                    const g = Math.round(80 + branch.growthFactor * 25);
+                    const b = Math.round(40 + branch.growthFactor * 15);
+                    color = `rgb(${r},${g},${b})`;
+                }
+
+                ctx.strokeStyle = color;
+                ctx.lineWidth = Math.max(0.8, thickness);
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(bx, by);
+                ctx.lineTo(tx, ty);
+                ctx.stroke();
+
+                if (thickness > 3) {
+                    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+                    ctx.lineWidth = Math.max(0.5, thickness * 0.35);
+                    ctx.beginPath();
+                    ctx.moveTo(bx - thickness * 0.2, by - thickness * 0.1);
+                    ctx.lineTo(tx - thickness * 0.15, ty - thickness * 0.1);
+                    ctx.stroke();
+                }
+            }
+
+            function drawLeaf(ctx, leaf) {
+                const parentBranch = findLeafParent(leaf);
+                const gf = parentBranch ? parentBranch.growthFactor : 1;
+                if (gf < 0.15) return;
+                const alpha = Math.min(1, (gf - 0.15) / 0.5);
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.translate(leaf.x, leaf.y);
+                ctx.rotate(leaf.angle + (parentBranch ? parentBranch.worldAngle * 0.3 : 0));
+                ctx.fillStyle = leaf.color;
+                ctx.beginPath();
+                ctx.ellipse(0, 0, leaf.size, leaf.size * 0.4, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+                ctx.lineWidth = 0.5;
+                ctx.beginPath();
+                ctx.moveTo(-leaf.size * 0.6, 0);
+                ctx.lineTo(leaf.size * 0.6, 0);
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            function findLeafParent(leaf) {
+                for (const branch of allBranchesFlat) {
+                    if (branch.leaves.includes(leaf)) return branch;
+                }
+                return null;
+            }
+
+            function drawTreeShadow(ctx) {
+                if (!treeData || !treeData.trunk) return;
+                const trunk = treeData.trunk;
+                if (trunk.growthFactor < 0.1) return;
+                const sx = trunk.baseX;
+                const sy = groundY + 2;
+                ctx.fillStyle = 'rgba(0,0,0,0.12)';
+                ctx.beginPath();
+                ctx.ellipse(sx, sy, 50 + treeData.allBranches.length * 3, 12, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            let lastTime = performance.now() / 1000;
+            let leafSpawnTimer = 0;
+
+            function gameLoop(timestamp) {
+                const now = timestamp / 1000;
+                let dt = now - lastTime;
+                lastTime = now;
+                if (dt <= 0) dt = 0.016;
+                if (dt > 0.1) dt = 0.1;
+
+                updateWind(dt);
+                updateGrowth(now);
+
+                if (treeData && treeData.trunk) {
+                    treeData.trunk.updateWorldPositions();
+                    for (const branch of allBranchesFlat) {
+                        branch.updatePhysics(dt);
+                    }
+                    treeData.trunk.updateWorldPositions();
+                    for (const leaf of allLeavesFlat) {
+                        leaf.updatePhysics(dt);
+                    }
+                    if (isGrowthComplete() && allLeavesFlat.length > 20) {
+                        leafSpawnTimer += dt;
+                        const spawnRate = 0.4 + allLeavesFlat.length * 0.003;
+                        if (leafSpawnTimer > 1 / spawnRate) {
+                            leafSpawnTimer = 0;
+                            const rLeaf = allLeavesFlat[Math.floor(Math.random() * allLeavesFlat.length)];
+                            if (rLeaf && rLeaf.y < groundY - 10) {
+                                spawnFallingLeaf(rLeaf.x, rLeaf.y, rLeaf.color);
+                            }
+                        }
+                    }
+                }
+
+                updateParticles(dt);
+                updateFallingLeaves(dt);
+                findHoveredBranch();
+
+                ctx.clearRect(0, 0, W, H);
+                drawSky(ctx);
+                drawGround(ctx);
+                if (treeData) {
+                    drawTreeShadow(ctx);
+                    const sorted = [...allBranchesFlat].sort((a, b) => a.depth - b.depth);
+                    for (const branch of sorted) {
+                        drawBranch(ctx, branch);
+                    }
+                    for (const leaf of allLeavesFlat) {
+                        drawLeaf(ctx, leaf);
+                    }
+                }
+                renderFallingLeaves(ctx);
+                renderParticles(ctx);
+
+                const vignetteGrad = ctx.createRadialGradient(W / 2, H / 2, W * 0.55, W / 2, H / 2, W * 0.9);
+                vignetteGrad.addColorStop(0, 'rgba(0,0,0,0)');
+                vignetteGrad.addColorStop(1, 'rgba(0,0,0,0.18)');
+                ctx.fillStyle = vignetteGrad;
+                ctx.fillRect(0, 0, W, H);
+
+                updateTooltip();
+                requestAnimationFrame(gameLoop);
+            }
+
+            async function fetchGitHubRepos(username) {
+                const url = `https://api.github.com/users/${encodeURIComponent(username)}/repos?per_page=100&sort=updated`;
+                const response = await fetch(url);
+                if (!response.ok) {
+                    if (response.status === 404) throw new Error('Пользователь не найден');
+                    if (response.status === 403) throw new Error('Превышен лимит запросов. Попробуйте позже.');
+                    throw new Error(`Ошибка: ${response.status}`);
+                }
+                const data = await response.json();
+                if (!Array.isArray(data)) throw new Error('Некорректный ответ от GitHub');
+                return data;
+            }
+
+            function updateStatsUI(repoCount, starSum, branchCount, leafCount) {
+                repoCountEl.textContent = repoCount;
+                starSumEl.textContent = starSum;
+                branchCountEl.textContent = branchCount;
+                leafCountEl.textContent = leafCount;
+                statsRow.style.display = 'flex';
+            }
+
+            async function handleGrow(username) {
+                const trimmed = username.trim();
+                if (!trimmed) {
+                    errorMsg.textContent = 'Введите имя пользователя';
+                    return;
+                }
+                errorMsg.textContent = '';
+                growBtn.classList.add('loading');
+                try {
+                    const repos = await fetchGitHubRepos(trimmed);
+                    if (repos.length === 0) {
+                        buildTreeFromRepos([]);
+                        updateStatsUI(0, 0, allBranchesFlat.length, allLeavesFlat.length);
+                    } else {
+                        buildTreeFromRepos(repos);
+                        updateStatsUI(
+                            treeData.repoCount,
+                            treeData.starSum,
+                            treeData.allBranches.length,
+                            treeData.allLeaves.length
+                        );
+                    }
+                    repositionTree(treeData);
+                    usernameInput.blur();
+                } catch (err) {
+                    errorMsg.textContent = err.message;
+                    if (!treeData || !treeData.built || treeData.repoCount === 0) {
+                        buildMinimalTree();
+                        repositionTree(treeData);
+                        updateStatsUI(0, 0, allBranchesFlat.length, allLeavesFlat.length);
+                    }
+                } finally {
+                    growBtn.classList.remove('loading');
+                }
+            }
+
+            canvas.addEventListener('mousemove', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                mouseX = e.clientX - rect.left;
+                mouseY = e.clientY - rect.top;
+            });
+            canvas.addEventListener('mouseleave', () => {
+                mouseX = -1000;
+                mouseY = -1000;
+                hoveredBranch = null;
+                tooltip.style.display = 'none';
+                canvas.style.cursor = '';
+            });
+            canvas.addEventListener('click', () => {
+                if (hoveredBranch && hoveredBranch.repoData && hoveredBranch.repoData.html_url) {
+                    window.open(hoveredBranch.repoData.html_url, '_blank');
+                }
+            });
+
+            growBtn.addEventListener('click', () => {
+                handleGrow(usernameInput.value);
+            });
+            usernameInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    handleGrow(usernameInput.value);
+                }
+            });
+            document.querySelectorAll('.hint span[data-user]').forEach(el => {
+                el.addEventListener('click', () => {
+                    const user = el.getAttribute('data-user');
+                    usernameInput.value = user;
+                    handleGrow(user);
+                });
+            });
+
+            function init() {
+                buildMinimalTree();
+                repositionTree(treeData);
+                updateStatsUI(0, 0, allBranchesFlat.length, allLeavesFlat.length);
+                for (let i = 0; i < 30; i++) {
+                    spawnParticle(W / 2 + (Math.random() - 0.5) * 300, groundY - Math.random() * H * 0.6);
+                }
+                requestAnimationFrame(gameLoop);
+            }
+
+            init();
+        })();
+    </script>
+</body>
+</html>
